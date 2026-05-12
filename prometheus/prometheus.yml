@@ -4,9 +4,9 @@
 # ============================================================
 
 global:
-  scrape_interval: 15s          # How often to scrape targets
+  scrape_interval: 5s           # How often to scrape targets
   evaluation_interval: 15s      # How often to evaluate alert rules
-  scrape_timeout: 10s
+  scrape_timeout: 4s
   external_labels:
     cluster: "prod-infra"
     environment: "production"
@@ -38,16 +38,16 @@ scrape_configs:
 
   # ── Node Exporter: CPU / RAM / Disk / Network ──────────────
   - job_name: "node_exporter"
-    scrape_interval: 15s
+    scrape_interval: 5s
     static_configs:
       - targets: ["172.22.8.114:9100"]
         labels:
           instance: "vm1"
           role: "gpu-server"
-      # - targets: ["10.0.0.2:9100"]   # ← Replace with real VM2 IP
-      #   labels:
-      #     instance: "vm2"
-      #     role: "ml-workload"
+      - targets: ["172.22.8.107:9100"]
+        labels:
+          instance: "kagoj.ai"
+          role: "ml-workload"
       # - targets: ["10.0.0.3:9100"]   # ← Replace with real VM3 IP
       #   labels:
       #     instance: "vm3"
@@ -59,16 +59,13 @@ scrape_configs:
 
   # ── DCGM Exporter: GPU utilization / VRAM / Temp / Power ──
   - job_name: "dcgm_exporter"
-    scrape_interval: 15s
+    scrape_interval: 5s
     static_configs:
       - targets: ["172.22.8.114:9400"]
         labels:
           instance: "vm1"
           role: "app-server"
-      - targets: ["10.0.0.2:9400"]   # ← Replace with real VM2 IP
-        labels:
-          instance: "vm2"
-          role: "ml-workload"
+      # vm2 (common-portal) has no GPU — no DCGM exporter
       - targets: ["10.0.0.3:9400"]   # ← Replace with real VM3 IP
         labels:
           instance: "vm3"
