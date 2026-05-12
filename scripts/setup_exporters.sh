@@ -21,6 +21,9 @@ curl -fsSL "https://github.com/prometheus/node_exporter/releases/download/v${NOD
   -o node_exporter.tar.gz
 
 tar xzf node_exporter.tar.gz
+
+# Stop service before replacing binary (avoids "Text file busy")
+systemctl stop node_exporter 2>/dev/null || true
 cp "node_exporter-${NODE_EXPORTER_VERSION}.linux-amd64/node_exporter" /usr/local/bin/
 chown prometheus:prometheus /usr/local/bin/node_exporter
 
@@ -49,7 +52,8 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now node_exporter
+systemctl enable node_exporter
+systemctl restart node_exporter
 echo "    node_exporter started on :9100"
 
 # ─────────────────────────────────────────
@@ -65,6 +69,8 @@ else
   # Pull via Docker (easiest on most distros)
   if command -v docker &>/dev/null; then
     echo "    Using Docker for DCGM Exporter..."
+    # Remove existing container if present (idempotent re-run)
+    docker rm -f dcgm-exporter 2>/dev/null || true
     docker run -d \
       --name dcgm-exporter \
       --restart unless-stopped \
