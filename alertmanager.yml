@@ -1,0 +1,145 @@
+# ============================================================
+# alertmanager/alertmanager.yml — VM4
+# Routes alerts to Slack, Email, and PagerDuty
+# ============================================================
+
+global:
+  resolve_timeout: 5m
+  # SMTP for email alerts
+  smtp_smarthost: "smtp.gmail.com:587"
+  smtp_from: "alerts@yourdomain.com"
+  smtp_auth_username: "alerts@yourdomain.com"
+  smtp_auth_password: "${SMTP_PASSWORD}"   # set in .env
+  smtp_require_tls: true
+
+  # Slack defaults
+  slack_api_url: "${SLACK_WEBHOOK_URL}"    # set in .env
+
+# ─── Templates ───────────────────────────────────────────────
+templates:
+  - "/etc/alertmanager/templates/*.tmpl"
+
+# ─── Routing tree ────────────────────────────────────────────
+route:
+  receiver: "slack-default"
+  group_by: ["alertname", "instance", "severity"]
+  group_wait: 30s        # wait before sending first notification in group
+  group_interval: 5m     # how long to wait before sending a notification for new alerts
+  repeat_interval: 4h    # how long to wait before resending a notification
+
+  routes:
+    # Critical alerts → PagerDuty + Slack immediately
+    - matchers:
+        - severity = "critical"
+      receiver: "pagerduty-critical"
+      group_wait: 10s
+      repeat_interval: 1h
+      routes:
+        - matchers:
+            - alertname = "InstanceDown"
+          receiver: "pagerduty-critical"
+          group_wait: 0s
+
+    # Warning alerts → Slack only
+    - matchers:
+        - severity = "warning"
+      receiver: "slack-warnings"
+      group_wait: 1m
+      repeat_interval: 6h
+
+    # GPU alerts → dedicated Slack channel
+    - matchers:
+        - alertname =~ ".*GPU.*"
+      receiver: "slack-gpu"
+      group_wait: 30s
+
+# ─── Inhibition rules ────────────────────────────────────────
+inhibit_rules:
+  # Suppress warnings when a critical alert for the same instance fires
+  - source_matchers:
+      - severity = "critical"
+    target_matchers:
+      - severity = "warning"
+    equal: ["instance", "alertname"]
+
+# ─── Receivers ───────────────────────────────────────────────
+receivers:
+
+  # Default: Slack general alerts channel
+  - name: "slack-default"
+    slack_configs:
+      - channel: "#infra-alerts"
+        send_resolved: true
+        title: |-
+          [{{ .Status | toUpper }}{{ if eq .Status "firing" }}:{{ .Alerts.Firing | len }}{{ end }}] {{ .CommonLabels.alertname }}
+        text: >-
+          {{ range .Alerts }}
+          *Instance:* {{ .Labels.instance }} ({{ .Labels.role }})
+          *Severity:* {{ .Labels.severity }}
+          *Summary:* {{ .Annotations.summary }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: '{{ if eq .Status "firing" }}{{ if eq (index .Alerts 0).Labels.severity "critical" }}danger{{ else }}warning{{ end }}{{ else }}good{{ end }}'
+
+  # Warning-only Slack channel
+  - name: "slack-warnings"
+    slack_configs:
+      - channel: "#infra-warnings"
+        send_resolved: true
+        title: "⚠️ [{{ .Status | toUpper }}] {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts }}
+          *Instance:* {{ .Labels.instance }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: "warning"
+
+  # GPU-specific Slack channel
+  - name: "slack-gpu"
+    slack_configs:
+      - channel: "#gpu-alerts"
+        send_resolved: true
+        title: "🖥️ GPU Alert [{{ .Status | toUpper }}]: {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts }}
+          *Instance:* {{ .Labels.instance }}
+          *GPU:* {{ .Labels.gpu }}
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+
+  # Critical: PagerDuty + Slack
+  - name: "pagerduty-critical"
+    pagerduty_configs:
+      - routing_key: "${PAGERDUTY_ROUTING_KEY}"   # set in .env
+        severity: "critical"
+        summary: "{{ .CommonAnnotations.summary }}"
+        details:
+          firing: "{{ .Alerts.Firing | len }}"
+          instance: "{{ .CommonLabels.instance }}"
+          description: "{{ .CommonAnnotations.description }}"
+    slack_configs:
+      - channel: "#infra-critical"
+        send_resolved: true
+        title: "🚨 CRITICAL [{{ .Status | toUpper }}]: {{ .CommonLabels.alertname }}"
+        text: >-
+          {{ range .Alerts }}
+          *Instance:* {{ .Labels.instance }} ({{ .Labels.role }})
+          *Details:* {{ .Annotations.description }}
+          {{ end }}
+        color: "danger"
+
+  # Email receiver (can be added to any route)
+  - name: "email-ops"
+    email_configs:
+      - to: "ops-team@yourdomain.com"
+        send_resolved: true
+        headers:
+          Subject: '[{{ .Status | toUpper }}] {{ .CommonLabels.alertname }} on {{ .CommonLabels.instance }}'
+        html: |
+          <h3>{{ .CommonLabels.alertname }}</h3>
+          {{ range .Alerts }}
+          <p><strong>Instance:</strong> {{ .Labels.instance }}<br>
+          <strong>Severity:</strong> {{ .Labels.severity }}<br>
+          <strong>Summary:</strong> {{ .Annotations.summary }}<br>
+          <strong>Description:</strong> {{ .Annotations.description }}</p>
+          {{ end }}
