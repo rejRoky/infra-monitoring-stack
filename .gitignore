@@ -1,0 +1,28 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets & env
+.env
+.env.*
+*.secret
+secrets/
+
+# Docker volumes / data
+data/
+grafana-data/
+prometheus-data/
+
+# Logs
+*.log
+logs/
+
+# Temp
+*.tmp
+*.bak
