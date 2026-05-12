@@ -3,9 +3,9 @@
   "uid": "Oxed_c6Wz",
   "schemaVersion": 38,
   "version": 1,
-  "refresh": "30s",
+  "refresh": "1s",
   "time": {
-    "from": "now-1h",
+    "from": "now-15m",
     "to": "now"
   },
   "timepicker": {},
