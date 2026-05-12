@@ -112,8 +112,8 @@ receivers:
     pagerduty_configs:
       - routing_key: "${PAGERDUTY_ROUTING_KEY}"   # set in .env
         severity: "critical"
-        summary: "{{ .CommonAnnotations.summary }}"
         details:
+          summary: "{{ .CommonAnnotations.summary }}"
           firing: "{{ .Alerts.Firing | len }}"
           instance: "{{ .CommonLabels.instance }}"
           description: "{{ .CommonAnnotations.description }}"
