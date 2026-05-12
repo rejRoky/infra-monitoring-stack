@@ -73,6 +73,7 @@ else
     docker rm -f dcgm-exporter 2>/dev/null || true
     docker run -d \
       --name dcgm-exporter \
+      --hostname "$(hostname)" \
       --restart unless-stopped \
       --gpus all \
       --cap-add SYS_ADMIN \
