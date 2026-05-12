@@ -106,6 +106,7 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.8.1
     container_name: node-exporter
+    hostname: vm4
     restart: unless-stopped
     pid: host
     command:
