@@ -1,0 +1,85 @@
+# ============================================================
+# prometheus/rules/cpu_memory.yml
+# CPU and RAM alert rules
+# ============================================================
+
+groups:
+  - name: cpu_alerts
+    interval: 30s
+    rules:
+
+      # High CPU usage (>85% for 2 min)
+      - alert: HighCPUUsage
+        expr: >
+          100 - (avg by(instance) (
+            rate(node_cpu_seconds_total{mode="idle"}[2m])
+          ) * 100) > 85
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on {{ $labels.instance }}"
+          description: "CPU usage is {{ printf \"%.1f\" $value }}% on {{ $labels.instance }} (role: {{ $labels.role }})"
+
+      # Critical CPU usage (>95% for 5 min)
+      - alert: CriticalCPUUsage
+        expr: >
+          100 - (avg by(instance) (
+            rate(node_cpu_seconds_total{mode="idle"}[2m])
+          ) * 100) > 95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: CPU maxed on {{ $labels.instance }}"
+          description: "CPU usage is {{ printf \"%.1f\" $value }}% on {{ $labels.instance }}. Immediate action required."
+
+      # CPU steal (noisy neighbor on VM host)
+      - alert: HighCPUSteal
+        expr: >
+          avg by(instance) (
+            rate(node_cpu_seconds_total{mode="steal"}[5m])
+          ) * 100 > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU steal on {{ $labels.instance }}"
+          description: "CPU steal is {{ printf \"%.1f\" $value }}%. VM host may be overloaded."
+
+  - name: memory_alerts
+    interval: 30s
+    rules:
+
+      # Low available RAM (<10%)
+      - alert: LowMemory
+        expr: >
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low memory on {{ $labels.instance }}"
+          description: "Only {{ printf \"%.1f\" $value }}% RAM available on {{ $labels.instance }}"
+
+      # Critical RAM (<5%)
+      - alert: CriticalMemory
+        expr: >
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: Memory exhaustion on {{ $labels.instance }}"
+          description: "Only {{ printf \"%.1f\" $value }}% RAM left on {{ $labels.instance }}"
+
+      # High swap usage (>80%)
+      - alert: HighSwapUsage
+        expr: >
+          (1 - (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes)) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High swap usage on {{ $labels.instance }}"
+          description: "Swap is {{ printf \"%.1f\" $value }}% used on {{ $labels.instance }}"

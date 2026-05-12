@@ -1,0 +1,82 @@
+# ============================================================
+# prometheus/rules/gpu.yml
+# NVIDIA GPU alert rules via DCGM Exporter
+# ============================================================
+
+groups:
+  - name: gpu_alerts
+    interval: 30s
+    rules:
+
+      # High GPU utilization (>90% for 5 min)
+      - alert: HighGPUUtilization
+        expr: DCGM_FI_DEV_GPU_UTIL > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU utilization on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} on {{ $labels.instance }} is at {{ $value }}% utilization"
+
+      # High GPU memory usage (>90%)
+      - alert: HighGPUMemoryUsage
+        expr: >
+          (DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE)) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU VRAM usage on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} VRAM is {{ printf \"%.1f\" $value }}% full on {{ $labels.instance }}"
+
+      # Critical GPU memory (>98%)
+      - alert: CriticalGPUMemoryUsage
+        expr: >
+          (DCGM_FI_DEV_FB_USED / (DCGM_FI_DEV_FB_USED + DCGM_FI_DEV_FB_FREE)) * 100 > 98
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: GPU VRAM almost full on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} VRAM is {{ printf \"%.1f\" $value }}% full. OOM risk."
+
+      # GPU temperature warning (>80°C)
+      - alert: HighGPUTemperature
+        expr: DCGM_FI_DEV_GPU_TEMP > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High GPU temperature on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} temperature is {{ $value }}°C on {{ $labels.instance }}"
+
+      # GPU temperature critical (>90°C)
+      - alert: CriticalGPUTemperature
+        expr: DCGM_FI_DEV_GPU_TEMP > 90
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: GPU overheating on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} temperature is {{ $value }}°C. Thermal throttling likely."
+
+      # GPU power limit exceeded (>95% of TDP)
+      - alert: HighGPUPowerUsage
+        expr: >
+          (DCGM_FI_DEV_POWER_USAGE / DCGM_FI_DEV_POWER_MGMT_LIMIT) * 100 > 95
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "GPU near power limit on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} is using {{ printf \"%.1f\" $value }}% of TDP on {{ $labels.instance }}"
+
+      # GPU XID error (hardware/driver fault)
+      - alert: GPUXidError
+        expr: DCGM_FI_DEV_XID_ERRORS > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "GPU XID error on {{ $labels.instance }}"
+          description: "GPU {{ $labels.gpu }} reported XID error {{ $value }} on {{ $labels.instance }}. Check nvidia-smi logs."

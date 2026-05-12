@@ -1,0 +1,74 @@
+# ============================================================
+# prometheus/rules/instance.yml
+# Instance availability and network alert rules
+# ============================================================
+
+groups:
+  - name: instance_alerts
+    interval: 30s
+    rules:
+
+      # Instance unreachable (exporter down)
+      - alert: InstanceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Instance {{ $labels.instance }} is DOWN"
+          description: "Scrape target {{ $labels.instance }} (job: {{ $labels.job }}) has been unreachable for >1 minute"
+
+      # High network receive bandwidth (>500 Mbps)
+      - alert: HighNetworkReceive
+        expr: >
+          rate(node_network_receive_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) * 8 > 500 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inbound traffic on {{ $labels.instance }}"
+          description: "Interface {{ $labels.device }} on {{ $labels.instance }} receiving at {{ humanize $value }}bps"
+
+      # High network transmit bandwidth (>500 Mbps)
+      - alert: HighNetworkTransmit
+        expr: >
+          rate(node_network_transmit_bytes_total{device!~"lo|veth.*|docker.*|br-.*"}[5m]) * 8 > 500 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High outbound traffic on {{ $labels.instance }}"
+          description: "Interface {{ $labels.device }} on {{ $labels.instance }} transmitting at {{ humanize $value }}bps"
+
+      # High system load (> 2x CPU count)
+      - alert: HighSystemLoad
+        expr: >
+          node_load15 / count without(cpu, mode) (node_cpu_seconds_total{mode="idle"}) > 2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High system load on {{ $labels.instance }}"
+          description: "15-minute load average is {{ printf \"%.2f\" $value }}x CPU count on {{ $labels.instance }}"
+
+      # Too many open file descriptors (>80%)
+      - alert: HighOpenFileDescriptors
+        expr: >
+          (node_filefd_allocated / node_filefd_maximum) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High file descriptor usage on {{ $labels.instance }}"
+          description: "{{ printf \"%.1f\" $value }}% of file descriptors used on {{ $labels.instance }}"
+
+      # Clock skew (NTP drift >0.1s)
+      - alert: ClockSkew
+        expr: >
+          abs(node_timex_offset_seconds) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Clock skew on {{ $labels.instance }}"
+          description: "NTP offset is {{ printf \"%.3f\" $value }}s on {{ $labels.instance }}. Check NTP."

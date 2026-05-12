@@ -1,0 +1,79 @@
+# ============================================================
+# prometheus/rules/disk.yml
+# Disk space and I/O alert rules
+# ============================================================
+
+groups:
+  - name: disk_alerts
+    interval: 60s
+    rules:
+
+      # Low disk space (<15%)
+      - alert: LowDiskSpace
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}
+           / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}) * 100 < 15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} has {{ printf \"%.1f\" $value }}% free"
+
+      # Critical disk space (<5%)
+      - alert: CriticalDiskSpace
+        expr: >
+          (node_filesystem_avail_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}
+           / node_filesystem_size_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}) * 100 < 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "CRITICAL: Disk almost full on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} has only {{ printf \"%.1f\" $value }}% free"
+
+      # Disk will fill in <24h (predictive)
+      - alert: DiskWillFillIn24Hours
+        expr: >
+          predict_linear(
+            node_filesystem_free_bytes{fstype!~"tmpfs|fuse.lxcfs|squashfs|vfat"}[6h], 24*3600
+          ) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk filling up on {{ $labels.instance }}"
+          description: "{{ $labels.mountpoint }} on {{ $labels.instance }} predicted to fill within 24 hours"
+
+      # High disk read I/O (>100 MB/s sustained)
+      - alert: HighDiskReadIO
+        expr: >
+          rate(node_disk_read_bytes_total[5m]) > 100 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk read I/O on {{ $labels.instance }}"
+          description: "Disk {{ $labels.device }} on {{ $labels.instance }} reading at {{ humanize $value }}/s"
+
+      # High disk write I/O (>100 MB/s sustained)
+      - alert: HighDiskWriteIO
+        expr: >
+          rate(node_disk_written_bytes_total[5m]) > 100 * 1024 * 1024
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk write I/O on {{ $labels.instance }}"
+          description: "Disk {{ $labels.device }} on {{ $labels.instance }} writing at {{ humanize $value }}/s"
+
+      # High disk I/O utilization (>90%)
+      - alert: HighDiskIOUtilization
+        expr: >
+          rate(node_disk_io_time_seconds_total[5m]) * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk I/O saturation on {{ $labels.instance }}"
+          description: "Disk {{ $labels.device }} on {{ $labels.instance }} is {{ printf \"%.1f\" $value }}% utilized"
